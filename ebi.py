@@ -270,7 +270,7 @@ class EBI:
         }
 
 if __name__ == "__main__":
-    device = "/dev/ttyS6"
+    device = "/dev/ttyUSB0"
     try:
         device = sys.argv[1]
     except:
