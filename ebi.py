@@ -263,7 +263,7 @@ class EBI:
             return num
         return {
             'options': self.hex(ans[1:3]),
-            'rssi': signed((ans[4] << 8) + ans[3], 16),
+            'rssi': signed((ans[3] << 8) + ans[4], 16),
             'src': self.hex(ans[5:7]),
             'dst': self.hex(ans[7:9]),
             'data': bytes(ans[9:]),
