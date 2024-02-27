@@ -1,9 +1,13 @@
 #!/usr/bin/python3
+"""
+Python implementation for EBI protocol.
+"""
 
 import sys
-import serial, time
+import serial
 
 class EBI:
+    """EBI protocol class"""
     STATUS = {
         0x00: 'Success',
         0x01: 'Generic error',
@@ -106,10 +110,10 @@ class EBI:
     def __del__(self):
         if getattr(self, 'ser', None):
             self.ser.close()
-    def bcc(self, packet):
+    def __bcc(self, packet):
         return sum(packet) & 0xFF
     def hex(self, arr):
-        return ':'.join(map(lambda x: '%02x' % x, arr))
+        return bytes(arr).hex(":")
     def read(self):
         ans = list(self.ser.read(2))
         if len(ans) != 2:
@@ -118,18 +122,18 @@ class EBI:
         ans += list(self.ser.read(length-2))
         if self.debug:
             print('ans <-', self.hex(ans))
-        assert(ans[-1] == self.bcc(ans[:-1]))
+        assert ans[-1] == self.__bcc(ans[:-1])
         return ans[2:-1]
     def send(self,command):
-        n = len(command) + 3
-        packet  = [n >> 8 & 0xFF, n & 0xFF]
+        size = len(command) + 3
+        packet  = [size >> 8 & 0xFF, size & 0xFF]
         packet += command
-        packet += [self.bcc(packet)]
+        packet += [self.__bcc(packet)]
         if self.debug:
             print('cmd ->', self.hex(packet))
         self.ser.write(bytes(packet))
         ans = self.read()
-        assert(ans[0] == (command[0] | 0x80))
+        assert ans[0] == (command[0] | 0x80)
         return ans[1:]
     def device_info(self):
         ans = self.send([0x01])
@@ -147,9 +151,12 @@ class EBI:
         self.ser.timeout = 3
         boot = self.read()
         self.ser.timeout = _timeout
-        assert(boot[0] == 0x84)
+        assert boot[0] == 0x84
         self.state['state'] = boot[1]
-        return { 'status': EBI.STATUS.get(ans[0],ans[0]), 'boot_state': EBI.DEVICE_STATE.get(boot[1], None) }
+        return {
+            'status': EBI.STATUS.get(ans[0],ans[0]),
+            'boot_state': EBI.DEVICE_STATE.get(boot[1], None)
+        }
     def firmware_version(self):
         ans = self.send([0x06])
         return { 'firmware_version': self.hex(ans) }
@@ -157,13 +164,15 @@ class EBI:
         req_power = []
         try:
             req_power = [int(power) % 256]
-        except:
+        except ValueError:
             pass
         ans = self.send([0x10]+req_power)
         if req_power:
             return { 'status': EBI.STATUS.get(ans[0],ans[0]) }
         return { 'power': ans[0] }
-    def operating_channel(self, channel=None, spreading_factor=None, bandwidth=None, coding_rate=None):
+    def operating_channel(
+        self, channel=None, spreading_factor=None, bandwidth=None, coding_rate=None
+    ):
         req_channel = []
         if channel in EBI.LORA_CHANNEL and spreading_factor in EBI.LORA_SPREADING_FACTOR and \
             bandwidth in EBI.LORA_BANDWIDTH and coding_rate in EBI.LORA_CODING_RATE:
@@ -203,7 +212,7 @@ class EBI:
         ans = self.send([0x25] + req_preference)
         if req_preference:
             return { 'status': EBI.STATUS.get(ans[0],ans[0]) }
-        protocol = (ans[0] & 0x80) and "LoRaWAN" or "LoRaEMB"
+        protocol = 'LoRaWAN' if ans[0] & 0x80 else 'LoRaEMB'
         auto_join = (ans[0] & 0x40) != 0
         adr = (ans[0] & 0x20) != 0
         return { 'protocol': protocol, 'auto_join': auto_join, 'adr': adr }
@@ -217,15 +226,15 @@ class EBI:
         self.ser.timeout = _timeout
         return { 'status': EBI.STATUS.get(ans[0],ans[0]) }
     def send_data(self, payload, protocol=0, dst=None, port=1):
-        assert(protocol in [0,1])
-        if dst == None:
+        assert protocol in [0,1]
+        if dst is None:
             dst = [0xff, 0xff]
         if protocol == 0: # LoRaEMB
-            assert(len(dst)==2)
+            assert len(dst)==2
             options = [0x00, 0x00]
             header = options + dst
         else: # LoRaWAN
-            assert(port in range(1,224))
+            assert port in range(1,224)
             options = [0x40, 0x00]
             header = options + [port]
         ans = self.send([0x50] + header + payload)
@@ -243,7 +252,7 @@ class EBI:
     def ieee_address(self, mac=None):
         req_mac = []
         if mac:
-            assert(len(mac) == 8)
+            assert len(mac) == 8
             req_mac = mac
         ans = self.send([0x7e, 0x20] + req_mac)
         if req_mac:
@@ -255,8 +264,8 @@ class EBI:
         ans = self.read()
         self.ser.timeout = _timeout
         if not ans:
-            return
-        assert(ans[0] == 0xe0)
+            return None
+        assert ans[0] == 0xe0
         def signed(num, bits):
             if num & (1 <<(bits -1)):
                 return num - (1 << bits)
@@ -270,12 +279,10 @@ class EBI:
         }
 
 if __name__ == "__main__":
-    device = "/dev/ttyUSB0"
-    try:
-        device = sys.argv[1]
-    except:
-        pass
-    e = EBI(device, debug=True)
+    DEVICE = "/dev/ttyUSB0"
+    if len(sys.argv) > 1:
+        DEVICE = sys.argv[1]
+    e = EBI(DEVICE, debug=True)
     print("RESET:", e.reset())
     print("DEVICE STATE", e.state)
     if e.state['state'] == 'Online':
@@ -284,7 +291,10 @@ if __name__ == "__main__":
     print("OUTPUT POWER -> +13dBm:", e.output_power(13))
     print("OUTPUT POWER:", e.output_power())
     print("OPERATING CHANNEL:", e.operating_channel())
-    print("OPERATING CHANNEL -> CH 1 (868.100 MHz), SF 7, BW 125 kHz, CR 4/5:", e.operating_channel(1,7,0,1))
+    print(
+        "OPERATING CHANNEL -> CH 1 (868.100 MHz), SF 7, BW 125 kHz, CR 4/5:",
+        e.operating_channel(1,7,0,1)
+    )
     print("OPERATING CHANNEL:", e.operating_channel())
     print("ENERGY SAVE:", e.energy_save())
     print("ENERGY SAVE -> ALWAYS ON: ", e.energy_save(0))
