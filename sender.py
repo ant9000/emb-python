@@ -23,7 +23,7 @@ if __name__ == "__main__":
     print("NETWORK START:", e.network_start())
     payload = [0x12, 0x12, 0x12] + list(range(1,21))
     while True:
-        h, r = e.hex(payload), e.send_data(payload=payload)
-        print(f"SEND DATA {h}: {r}")
+        p, r = e.hex(payload), e.send_data(payload=payload)
+        print(f"SEND DATA:\n\tpayload: {p}\n\tresult: {r}")
         time.sleep(1)
     print("NETWORK STOP:", e.network_stop())

@@ -103,7 +103,7 @@ class EBI:
     def __init__(self,dev, debug=True):
         self.debug = debug
         self.dev = dev
-        self.ser = serial.Serial(self.dev,baudrate=9600,timeout=.1)
+        self.ser = serial.Serial(self.dev,baudrate=9600,timeout=5)
         self.state = self.device_info()
         self.state.update(self.device_state())
         self.state.update(self.firmware_version())
@@ -215,6 +215,7 @@ class EBI:
         protocol = 'LoRaWAN' if ans[0] & 0x80 else 'LoRaEMB'
         auto_join = (ans[0] & 0x40) != 0
         adr = (ans[0] & 0x20) != 0
+        self.state['ebi_protocol'] = EBI.PROTOCOL.get(protocol)
         return { 'protocol': protocol, 'auto_join': auto_join, 'adr': adr }
     def network_stop(self):
         ans = self.send([0x30])
@@ -227,15 +228,15 @@ class EBI:
         return { 'status': EBI.STATUS.get(ans[0],ans[0]) }
     def send_data(self, payload, protocol=0, dst=None, port=1):
         assert protocol in [0,1]
-        if dst is None:
-            dst = [0xff, 0xff]
         if protocol == 0: # LoRaEMB
-            assert len(dst)==2
             options = [0x00, 0x00]
+            if dst is None:
+                dst = [0xff, 0xff]
+            assert len(dst)==2
             header = options + dst
         else: # LoRaWAN
             assert port in range(1,224)
-            options = [0x40, 0x00]
+            options = [0x09, 0x00]
             header = options + [port]
         ans = self.send([0x50] + header + payload)
         result = {
@@ -244,10 +245,10 @@ class EBI:
             'RSSI':            (ans[2] << 8) + ans[3],
         }
         if result['status'] == 'Success' and protocol == 1:
-            result['tx_channel_mask'] = ans[4:5]
+            result['tx_channel_mask'] = (ans[4] << 8) + ans[5]
             result['tx_datarate_mask'] = ans[6]
             result['tx_power'] = ans[7]
-            result['waiting_time'] = ans[8:12]
+            result['waiting_time'] = (ans[8] << 24) + (ans[9] << 16) + (ans[10] << 8) + ans[11]
         return result
     def ieee_address(self, mac=None):
         req_mac = []
