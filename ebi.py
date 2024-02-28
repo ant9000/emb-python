@@ -114,7 +114,11 @@ class EBI:
         return sum(packet) & 0xFF
     def hex(self, arr):
         "print arr as hexstring"
-        return bytes(arr).hex(":")
+        try:
+            _hex = bytes(arr).hex(":")
+        except TypeError: # no separator on older Python3
+            _hex = bytes(arr).hex()
+        return _hex
     def _read(self):
         ans = list(self.ser.read(2))
         if len(ans) != 2:
