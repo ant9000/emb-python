@@ -1,10 +1,13 @@
 #!/usr/bin/python3
+"""EBI example shell"""
 
-import cmd, sys, readline, shlex
+import cmd
+import sys
+import shlex
 from ebi import EBI
 
 class EmbitShell(cmd.Cmd):
-
+    """EBI Command shell"""
     prompt = "EMB> "
 
     def __init__(self, device, debug=True):
@@ -21,8 +24,10 @@ class EmbitShell(cmd.Cmd):
             self._e.network_stop()
         if self.debug:
             print("---Energy save")
-        self._e.energy_save(0x00) # Always on
-        self._params = { 'channel': 1, 'sf': 7, 'bw': 0, 'cr': 1 } # 868.100 MHz, 128 Chips/symbol, 125 kHz, 4/5
+        # Always on
+        self._e.energy_save(0x00)
+        # 868.100 MHz, 128 Chips/symbol, 125 kHz, 4/5
+        self._params = { 'channel': 1, 'sf': 7, 'bw': 0, 'cr': 1 }
         if self.debug:
             print("---Operating channel")
         self._e.operating_channel(*self._params.values())
@@ -40,18 +45,21 @@ class EmbitShell(cmd.Cmd):
     def do_debug(self, arg):
         """toggle debug mode
 Usage: debug"""
+        # pylint: disable=unused-argument
         self._e.debug = not self._e.debug
-        print("{'debug': %s}" % self._e.debug)
+        print(f"{'debug': {self._e.debug}}")
 
     def do_state(self, arg):
         """get device state
 Usage: state"""
+        # pylint: disable=unused-argument
         ret = self._e.device_state()
         print(ret)
 
     def do_reset(self, arg):
         """reset device
 Usage: reset"""
+        # pylint: disable=unused-argument
         ret = self._e.device_state()
         print(ret)
 
@@ -65,7 +73,7 @@ value: [0-256]"""
             try:
                 value = int(arg) % 256
             except ValueError:
-                print("Invalid power value {}".format(arg))
+                print(f"Invalid power value {arg}")
                 return
         state = self._e.device_state()
         should_stop = value and state['state'] == 'Online'
@@ -100,28 +108,24 @@ cr: 0x01 -> 4/5
         args = (arg.split() + [""]*4)[:4]
         if args[0]:
             try:
-                channel = int(args[0])
-                EBI.LORA_CHANNEL[channel]
+                channel = EBI.LORA_CHANNEL[int(args[0])]
             except (ValueError, KeyError):
-                print("Invalid channel value {}".format(args[0]))
+                print(f"Invalid channel value {args[0]}")
                 return
             try:
-                spreading_factor = int(args[1])
-                EBI.LORA_SPREADING_FACTOR[spreading_factor]
+                spreading_factor = EBI.LORA_SPREADING_FACTOR[int(args[1])]
             except (ValueError, KeyError):
-                print("Invalid spreading factor value {}".format(args[1]))
+                print(f"Invalid spreading factor value {args[1]}")
                 return
             try:
-                bandwidth = int(args[2])
-                EBI.LORA_BANDWIDTH[bandwidth]
+                bandwidth = EBI.LORA_BANDWIDTH[int(args[2])]
             except (ValueError, KeyError):
-                print("Invalid bandwith value {}".format(args[2]))
+                print(f"Invalid bandwith value {args[2]}")
                 return
             try:
-                coding_rate = int(args[3])
-                EBI.LORA_CODING_RATE[coding_rate]
+                coding_rate = EBI.LORA_CODING_RATE[int(args[3])]
             except (ValueError, KeyError):
-                print("Invalid coding rate value {}".format(args[3]))
+                print(f"Invalid coding rate value {args[3]}")
                 return
         state = self._e.device_state()
         should_stop = channel and state['state'] == 'Online'
@@ -129,9 +133,12 @@ cr: 0x01 -> 4/5
             self._e.network_stop()
         ret = self._e.operating_channel(channel, spreading_factor, bandwidth, coding_rate)
         if channel and ret.get('status','') == 'Success':
-            self._params = { 'channel': channel, 'sf': spreading_factor, 'bw': bandwidth, 'cr': coding_rate }
+            self._params = {
+                'channel': channel, 'sf': spreading_factor,
+                'bw': bandwidth, 'cr': coding_rate,
+            }
         if 'channel' in ret:
-            assert(ret['channel'] == self._params['channel'])
+            assert ret['channel'] == self._params['channel']
         ret.update(self._params)
         if should_stop:
             self._e.network_start()
@@ -148,7 +155,7 @@ value: [0-65535]"""
                 value = int(arg)
                 value = [ (value & 0xFF00) >> 8, value & 0x00FF ]
             except ValueError:
-                print("Invalid address value {}".format(arg))
+                print(f"Invalid address value {arg}")
                 return
         state = self._e.device_state()
         should_stop = value and state['state'] == 'Online'
@@ -170,7 +177,7 @@ value: [0-65535]"""
                 value = int(arg)
                 value = [ (value & 0xFF00) >> 8, value & 0x00FF ]
             except ValueError:
-                print("Invalid network value {}".format(arg))
+                print(f"Invalid network value {arg}")
                 return
         state = self._e.device_state()
         should_stop = value and state['state'] == 'Online'
@@ -191,12 +198,12 @@ dest: [0-65535]; specify no dest for broadcast"""
             return
         payload, dst = (shlex.split(arg)+[None])[:2]
         payload = list(bytes(payload, 'utf8'))
-        if dst != None:
+        if dst is not None:
             try:
                 dst = int(dst)
                 dst = [ (dst & 0xFF00) >> 8, dst & 0x00FF ]
             except ValueError:
-                print("Invalid destination value {}".format(dst))
+                print(f"Invalid destination value {dst}")
                 return
         ret = self._e.send_data(payload=payload, dst=dst)
         print(ret)
@@ -211,7 +218,7 @@ timeout in seconds; specify no timeout to wait forever"""
             try:
                 timeout = int(arg)
             except ValueError:
-                print("Invalid timeout {}".format(arg))
+                print(f"Invalid timeout {arg}")
                 return
         ret = self._e.receive(timeout)
         print(ret)
@@ -219,18 +226,16 @@ timeout in seconds; specify no timeout to wait forever"""
     def do_quit(self, arg):
         """quit EMB shell
 Usage: quit"""
+        # pylint: disable=unused-argument
         print("Bye!")
         return True
 
 if __name__ == '__main__':
-    device = "/dev/ttyUSB0"
-    try:
-        device = sys.argv[1]
-    except:
-        pass
-    shell = EmbitShell(device)
+    DEVICE = "/dev/ttyUSB0"
+    if len(sys.argv) > 1:
+        DEVICE = sys.argv[1]
+    shell = EmbitShell(DEVICE)
     try:
         shell.cmdloop()
     except KeyboardInterrupt:
         print("Bye!")
-

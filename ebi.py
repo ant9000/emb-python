@@ -113,8 +113,9 @@ class EBI:
     def __bcc(self, packet):
         return sum(packet) & 0xFF
     def hex(self, arr):
+        "print arr as hexstring"
         return bytes(arr).hex(":")
-    def read(self):
+    def _read(self):
         ans = list(self.ser.read(2))
         if len(ans) != 2:
             return None
@@ -124,7 +125,7 @@ class EBI:
             print('ans <-', self.hex(ans))
         assert ans[-1] == self.__bcc(ans[:-1])
         return ans[2:-1]
-    def send(self,command):
+    def _send(self,command):
         size = len(command) + 3
         packet  = [size >> 8 & 0xFF, size & 0xFF]
         packet += command
@@ -132,24 +133,27 @@ class EBI:
         if self.debug:
             print('cmd ->', self.hex(packet))
         self.ser.write(bytes(packet))
-        ans = self.read()
+        ans = self._read()
         assert ans[0] == (command[0] | 0x80)
         return ans[1:]
     def device_info(self):
-        ans = self.send([0x01])
+        "get device info (uuid, type, protocol)"
+        ans = self._send([0x01])
         return {
             'ebi_protocol': EBI.PROTOCOL.get(ans[0], None),
             'embit_module': EBI.EMBIT_MODULE.get(ans[1], None),
             'uuid': self.hex(ans[2:]),
         }
     def device_state(self):
-        ans = self.send([0x04])
+        "get device state"
+        ans = self._send([0x04])
         return { 'state': EBI.DEVICE_STATE.get(ans[0], None) }
     def reset(self):
-        ans = self.send([0x05])
+        "reset device"
+        ans = self._send([0x05])
         _timeout = self.ser.timeout
         self.ser.timeout = 3
-        boot = self.read()
+        boot = self._read()
         self.ser.timeout = _timeout
         assert boot[0] == 0x84
         self.state['state'] = boot[1]
@@ -158,58 +162,65 @@ class EBI:
             'boot_state': EBI.DEVICE_STATE.get(boot[1], None)
         }
     def firmware_version(self):
-        ans = self.send([0x06])
+        "get firmware version"
+        ans = self._send([0x06])
         return { 'firmware_version': self.hex(ans) }
     def output_power(self, power=None):
+        "get or set output power"
         req_power = []
         try:
             req_power = [int(power) % 256]
         except ValueError:
             pass
-        ans = self.send([0x10]+req_power)
+        ans = self._send([0x10]+req_power)
         if req_power:
             return { 'status': EBI.STATUS.get(ans[0],ans[0]) }
         return { 'power': ans[0] }
     def operating_channel(
         self, channel=None, spreading_factor=None, bandwidth=None, coding_rate=None
     ):
+        "get or set radio modulation parameter"
         req_channel = []
         if channel in EBI.LORA_CHANNEL and spreading_factor in EBI.LORA_SPREADING_FACTOR and \
             bandwidth in EBI.LORA_BANDWIDTH and coding_rate in EBI.LORA_CODING_RATE:
             req_channel = [channel, spreading_factor, bandwidth, coding_rate]
-        ans = self.send([0x11] + req_channel)
+        ans = self._send([0x11] + req_channel)
         if req_channel:
             return { 'status': EBI.STATUS.get(ans[0],ans[0]) }
         return { 'channel': ans[0] }
     def energy_save(self, policy=None):
+        "get or set energy save policy"
         req_policy = []
         if policy in EBI.MODULE_SLEEP_POLICY:
             req_policy = [policy]
-        ans = self.send([0x13] + req_policy)
+        ans = self._send([0x13] + req_policy)
         if req_policy:
             return { 'status': EBI.STATUS.get(ans[0],ans[0]) }
         return { 'policy': EBI.MODULE_SLEEP_POLICY.get(ans[0], ans[0]) }
     def network_address(self, address=None):
+        "get or set network address"
         req_address = []
         if address and len(address) in [2,4]:
             req_address = address
-        ans = self.send([0x21] + req_address)
+        ans = self._send([0x21] + req_address)
         if req_address:
             return { 'status': EBI.STATUS.get(ans[0],ans[0]) }
         return { 'address': self.hex(ans) }
     def network_identifier(self, identifier=None):
+        "get or set network identifier"
         req_identifier = []
         if identifier and len(identifier) in [2,4]:
             req_identifier = identifier
-        ans = self.send([0x22] + req_identifier)
+        ans = self._send([0x22] + req_identifier)
         if req_identifier:
             return { 'status': EBI.STATUS.get(ans[0],ans[0]) }
         return { 'identifier': self.hex(ans) }
     def network_preference(self, protocol=None, auto_join=None, adr=None):
+        "get or set network preference"
         req_preference = []
         if protocol in [0,1] and auto_join in [0,1] and adr in [0,1]:
             req_preference = [(protocol << 7) + (auto_join << 6) + (adr << 5)]
-        ans = self.send([0x25] + req_preference)
+        ans = self._send([0x25] + req_preference)
         if req_preference:
             return { 'status': EBI.STATUS.get(ans[0],ans[0]) }
         protocol = 'LoRaWAN' if ans[0] & 0x80 else 'LoRaEMB'
@@ -218,15 +229,18 @@ class EBI:
         self.state['ebi_protocol'] = EBI.PROTOCOL.get(protocol)
         return { 'protocol': protocol, 'auto_join': auto_join, 'adr': adr }
     def network_stop(self):
-        ans = self.send([0x30])
+        "stop network"
+        ans = self._send([0x30])
         return { 'status': EBI.STATUS.get(ans[0],ans[0]) }
     def network_start(self):
+        "start network"
         _timeout = self.ser.timeout
         self.ser.timeout = 3
-        ans = self.send([0x31])
+        ans = self._send([0x31])
         self.ser.timeout = _timeout
         return { 'status': EBI.STATUS.get(ans[0],ans[0]) }
     def send_data(self, payload, protocol=0, dst=None, port=1):
+        "send data"
         assert protocol in [0,1]
         if protocol == 0: # LoRaEMB
             options = [0x00, 0x00]
@@ -238,7 +252,7 @@ class EBI:
             assert port in range(1,224)
             options = [0x09, 0x00]
             header = options + [port]
-        ans = self.send([0x50] + header + payload)
+        ans = self._send([0x50] + header + payload)
         result = {
             'status':          EBI.STATUS.get(ans[0],ans[0]),
             'retries':         ans[1],
@@ -251,18 +265,20 @@ class EBI:
             result['waiting_time'] = (ans[8] << 24) + (ans[9] << 16) + (ans[10] << 8) + ans[11]
         return result
     def ieee_address(self, mac=None):
+        "get or set IEEE address"
         req_mac = []
         if mac:
             assert len(mac) == 8
             req_mac = mac
-        ans = self.send([0x7e, 0x20] + req_mac)
+        ans = self._send([0x7e, 0x20] + req_mac)
         if req_mac:
             return { 'status': EBI.STATUS.get(ans[0],ans[0]) }
         return { 'ieee_address': self.hex(ans) }
     def receive(self, timeout=None):
+        "listen for data"
         _timeout = self.ser.timeout
         self.ser.timeout = timeout
-        ans = self.read()
+        ans = self._read()
         self.ser.timeout = _timeout
         if not ans:
             return None
