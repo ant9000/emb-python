@@ -278,7 +278,7 @@ class EBI:
         if req_mac:
             return { 'status': EBI.STATUS.get(ans[0],ans[0]) }
         return { 'ieee_address': self.hex(ans) }
-    def receive(self, timeout=None):
+    def receive(self, protocol=0, timeout=None):
         "listen for data"
         _timeout = self.ser.timeout
         self.ser.timeout = timeout
@@ -291,13 +291,18 @@ class EBI:
             if num & (1 <<(bits -1)):
                 return num - (1 << bits)
             return num
-        return {
+        packet = {
             'options': self.hex(ans[1:3]),
             'rssi': signed((ans[3] << 8) + ans[4], 16),
-            'src': self.hex(ans[5:7]),
-            'dst': self.hex(ans[7:9]),
-            'data': bytes(ans[9:]),
         }
+        if protocol == 0:
+            packet['src'] = self.hex(ans[5:7])
+            packet['dst'] = self.hex(ans[7:9])
+            packet['data'] = bytes(ans[9:])
+        elif protocol == 1:
+            packet['port'] = ans[5]
+            packet['data'] = bytes(ans[6:])
+        return packet
 
 if __name__ == "__main__":
     DEVICE = "/dev/ttyUSB0"
