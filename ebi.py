@@ -263,10 +263,14 @@ class EBI:
             'RSSI':            (ans[2] << 8) + ans[3],
         }
         if result['status'] == 'Success' and protocol == 1:
-            result['tx_channel_mask'] = (ans[4] << 8) + ans[5]
-            result['tx_datarate_mask'] = ans[6]
-            result['tx_power'] = ans[7]
-            result['waiting_time'] = (ans[8] << 24) + (ans[9] << 16) + (ans[10] << 8) + ans[11]
+            if len(ans) >= 6:
+                result['tx_channel_mask'] = (ans[4] << 8) + ans[5]
+            if len(ans) >= 7:
+                result['tx_datarate_mask'] = ans[6]
+            if len(ans) >= 8:
+                result['tx_power'] = ans[7]
+            if len(ans) == 12:
+                result['waiting_time'] = (ans[8] << 24) + (ans[9] << 16) + (ans[10] << 8) + ans[11]
         return result
     def ieee_address(self, mac=None):
         "get or set IEEE address"
