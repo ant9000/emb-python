@@ -262,7 +262,7 @@ class EBI:
             'retries':         ans[1],
             'RSSI':            (ans[2] << 8) + ans[3],
         }
-        if result['status'] == 'Success' and protocol == 1:
+        if result['status'] == 'Success':
             if len(ans) >= 6:
                 result['tx_channel_mask'] = (ans[4] << 8) + ans[5]
             if len(ans) >= 7:
